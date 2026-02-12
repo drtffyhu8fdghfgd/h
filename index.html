@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Adolf</title>
+  <link rel="icon" type="image/png" href="https://i.imgur.com/1lOjLFC.png">
+
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #000;
+      color: white;
+      font-family: sans-serif;
+    }
+
+    #gallery {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      padding: 4px;
+      opacity: 0;
+      transition: opacity 0.5s ease-in-out;
+    }
+
+    .row {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 4px;
+    }
+
+    video {
+      margin: 2px;
+      display: block;
+      object-fit: contain;
+      background: #000;
+      cursor: pointer;
+    }
+
+    #loading {
+      position: fixed;
+      inset: 0;
+      background: #000;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      z-index: 9999;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="loading">Loading...</div>
+  <div id="gallery"></div>
+
+  <script>
+    const owner = 'drtffyhu8fdghfgd';
+    const repo = 'h';
+    const branch = 'main';
+
+    async function getVideos() {
+      const res = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`
+      );
+      const data = await res.json();
+
+      return data.tree
+        .filter(f => f.type === 'blob' && f.path.toLowerCase().endsWith('.mp4'))
+        .map(f =>
+          `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${f.path}`
+        );
+    }
+
+    async function loadVideos() {
+      const urls = await getVideos();
+      const gallery = document.getElementById('gallery');
+
+      const metas = await Promise.all(
+        urls.map(url => new Promise(resolve => {
+          const video = document.createElement('video');
+          video.src = url;
+          video.preload = 'metadata';
+
+          video.onloadedmetadata = () => {
+            resolve({
+              url,
+              w: video.videoWidth,
+              h: video.videoHeight,
+              aspect: video.videoWidth / video.videoHeight
+            });
+          };
+
+          video.onerror = () => resolve(null);
+        }))
+      );
+
+      renderRows(metas.filter(Boolean));
+      document.getElementById('loading').style.display = 'none';
+      gallery.style.opacity = 1;
+    }
+
+    function renderRows(videos) {
+      const gallery = document.getElementById('gallery');
+      gallery.innerHTML = '';
+
+      const targetRowHeight = 220;
+      const containerWidth = gallery.clientWidth || window.innerWidth;
+
+      let row = [];
+      let aspectSum = 0;
+
+      for (const vid of videos) {
+        row.push(vid);
+        aspectSum += vid.aspect;
+
+        if (containerWidth / aspectSum < targetRowHeight * 1.2) {
+          addRow(row, containerWidth, aspectSum);
+          row = [];
+          aspectSum = 0;
+        }
+      }
+
+      if (row.length) addRow(row, containerWidth, aspectSum);
+    }
+
+    function addRow(rowVids, containerWidth, totalAspect) {
+      const gallery = document.getElementById('gallery');
+      const rowEl = document.createElement('div');
+      rowEl.className = 'row';
+
+      const height = containerWidth / totalAspect;
+
+      for (const vid of rowVids) {
+        const el = document.createElement('video');
+        el.src = vid.url;
+        el.width = height * vid.aspect;
+        el.height = height;
+
+        el.autoplay = true;
+        el.loop = true;
+        el.muted = true;
+        el.playsInline = true;
+        el.preload = 'metadata';
+
+        // 🔊 HOVER SOUND LOGIC
+        el.addEventListener('mouseenter', () => {
+          el.muted = false;
+          el.volume = 1.0;
+        });
+
+        el.addEventListener('mouseleave', () => {
+          el.muted = true;
+        });
+
+        rowEl.appendChild(el);
+      }
+
+      gallery.appendChild(rowEl);
+    }
+
+    window.addEventListener('resize', () => {
+      clearTimeout(window._resizeTimer);
+      window._resizeTimer = setTimeout(loadVideos, 300);
+    });
+
+    loadVideos();
+  </script>
+</body>
+</html>
